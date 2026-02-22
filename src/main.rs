@@ -182,6 +182,11 @@ async fn chat_completions(
             let status = res.status();
             let mut body: serde_json::Value = res.json().await.unwrap_or_default();
             
+            // IMPORTANT: If provider returned an error, don't try to score it
+            if !status.is_success() {
+                return (status, Json(body)).into_response();
+            }
+
             if let Some(content) = body["choices"][0]["message"]["content"].as_str() {
                 let content_str = content.to_string();
                 
