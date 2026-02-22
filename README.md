@@ -20,6 +20,29 @@ $$ROI = \frac{(H_{manual} \times R_{hora}) - (C_{tokens} + C_{Sentinel})}{C_{Sen
 
 *On average, Sentinel reduces token waste by **40%-60%** by eliminating redundant loops and runaway tasks.*
 
+## 🎬 Sentinel in Action: Proof of Concept
+
+Don't just take our word for it. Sentinel includes a **Sales-Ready Pitch Demo** that simulates real agent failures and demonstrates immediate ROI.
+
+```bash
+# Terminal 1: Start Sentinel
+cargo run
+
+# Terminal 2: Run the High-Impact Demo
+python scripts/demo_pitch.py
+```
+
+### What happens?
+1. **Agent Failure**: We simulate an agent stuck in a "System Log Analysis" loop.
+2. **Sentinel Interception**: Sentinel detects the semantic repetition in <10ms.
+3. **ROI Report**: The demo calculates the **Dollars Saved** by preventing the runaway execution.
+
+| Attack Vector | Before Sentinel | After Sentinel | Status |
+| :--- | :--- | :--- | :--- |
+| **Semantic Loop** | $50.00+ Waste | $0.50 Detection | ✅ Blocked |
+| **Token Runaway** | Unlimited Spend | Custom Caps | ✅ Throttled |
+| **Data Leak** | Privacy Breach | Real-time Filter | ✅ Secure |
+
 ## 🛠️ Tech Stack
 
 - **Language**: Rust
