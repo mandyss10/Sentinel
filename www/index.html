@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -43,7 +44,10 @@
             margin: 0;
             background: linear-gradient(to right, #60a5fa, #3b82f6);
             -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            -webkit-background-fill-color: transparent;
+            /* Changed for better compatibility */
+            color: transparent;
             font-weight: 800;
             letter-spacing: -0.05em;
         }
@@ -66,11 +70,19 @@
             transition: transform 0.2s;
         }
 
-        .cta:hover { transform: scale(1.05); }
+        .cta:hover {
+            transform: scale(1.05);
+        }
 
         /* Sections */
-        section { padding: 4rem 0; }
-        h2 { font-size: 2.5rem; margin-bottom: 2rem; }
+        section {
+            padding: 4rem 0;
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+        }
 
         .grid {
             display: grid;
@@ -85,7 +97,10 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        .card h3 { color: var(--accent); margin-top: 0; }
+        .card h3 {
+            color: var(--accent);
+            margin-top: 0;
+        }
 
         /* Demo Sim */
         .terminal {
@@ -97,8 +112,14 @@
             font-size: 0.9rem;
         }
 
-        .log-error { color: var(--danger); font-weight: bold; }
-        .log-success { color: var(--success); }
+        .log-error {
+            color: var(--danger);
+            font-weight: bold;
+        }
+
+        .log-success {
+            color: var(--success);
+        }
 
         /* Footer */
         footer {
@@ -109,6 +130,7 @@
         }
     </style>
 </head>
+
 <body>
 
     <header>
@@ -125,11 +147,13 @@
             <div class="grid">
                 <div class="card">
                     <h3>Semantic Stall</h3>
-                    <p>Agents get stuck in stochastic reasoning loops, repeating the same logic with slightly different words.</p>
+                    <p>Agents get stuck in stochastic reasoning loops, repeating the same logic with slightly different
+                        words.</p>
                 </div>
                 <div class="card">
                     <h3>Economic Runaway</h3>
-                    <p>A single recursive bug can empty your API wallet in minutes. Most firewalls are too slow or too simple.</p>
+                    <p>A single recursive bug can empty your API wallet in minutes. Most firewalls are too slow or too
+                        simple.</p>
                 </div>
             </div>
         </div>
@@ -141,7 +165,8 @@
             <div class="grid">
                 <div class="card">
                     <h3>Rust-Powered Proxy</h3>
-                    <p>Sub-10ms overhead. Intercepts OpenAI/Anthropic calls in real-time with concurrent state engine.</p>
+                    <p>Sub-10ms overhead. Intercepts OpenAI/Anthropic calls in real-time with concurrent state engine.
+                    </p>
                 </div>
                 <div class="card">
                     <h3>Progress Scoring</h3>
@@ -158,7 +183,8 @@
                 <div>[16:20:01] <span class="log-success">FORWARD</span> to gpt-4o-mini</div>
                 <div>[16:20:03] <span class="log-success">SUCCESS</span> | Usage: 450 tokens ($0.00007)</div>
                 <div>[16:20:05] <span class="log-success">FORWARD</span> to gpt-4o-mini (Loop attempt 2)</div>
-                <div>[16:20:07] <span class="log-error">SENTINEL: INTERCEPTED</span> - Semantic Loop Detected (Dist: 0.012)</div>
+                <div>[16:20:07] <span class="log-error">SENTINEL: INTERCEPTED</span> - Semantic Loop Detected (Dist:
+                    0.012)</div>
                 <div>[16:20:07] <span class="log-error">ACTION</span>: Returning escape strategy prompt.</div>
             </div>
         </div>
@@ -169,7 +195,8 @@
             <h2>Installation</h2>
             <div class="card">
                 <p>One line to secure your agents:</p>
-                <code style="background: black; padding: 0.5rem 1rem; border-radius: 0.25rem;">cargo run --release</code>
+                <code
+                    style="background: black; padding: 0.5rem 1rem; border-radius: 0.25rem;">cargo run --release</code>
             </div>
         </div>
     </section>
@@ -181,4 +208,5 @@
     </footer>
 
 </body>
+
 </html>

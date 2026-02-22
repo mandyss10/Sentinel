@@ -5,7 +5,8 @@
 ## 🚀 Core Features
 
 - **Performance-First Proxy**: Built with **Rust (Axum)** for sub-10ms latency.
-- **Semantic Loop Detection**: Guards against "semantic stalls" by analyzing embeddings distance between agent thought steps.
+- **Multi-Provider Support**: Seamlessly route requests between **OpenAI** and **Groq** for ultra-fast inference.
+- **Semantic Loop Detection**: Guards against "semantic stalls" by analyzing embeddings distance.
 - **Anti-Exploit Security**: 
     - **Economic Throttling**: Automatically cuts execution if spending grows exponentially.
     - **EchoLeak Protection**: Filters patterns used in indirect injections to exfiltrate data.
