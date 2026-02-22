@@ -5,8 +5,11 @@ The trajectory for the world's first AI Performance Firewall.
 ## 🔴 High Impact (Immediate Focus)
 
 1.  **Local LLM Integration (Llama.cpp/Ollama)**: Support for local embedding models to reduce latency to <1ms and eliminate external API costs for loop detection.
-2.  **Sentinel Dashboard (SaaS)**: Visual observability panel for multi-agent fleets with real-time "Loop Heatmaps."
-3.  **Automated Red-Teaming Tool**: A CLI utility that tries to "bankrupt" your agent to test Sentinel's throttling limits.
+2.  **Sentinel Dashboard (SaaS)**: Visual observability panel for multi-agent fleets.
+    -   **Loop Heatmaps**: Real-time tracking of redundant patterns.
+    -   **Shadow Logs**: Visual logs explaining *why* a specific prompt was blocked (Semantic Rejection Proof).
+    -   **ROI Savings Panel**: Real-time ticker showing avoided costs and GPU time saved.
+3.  **Governance & Compliance**: Enterprise module for auditing decision-making and data exfiltration attempts.
 
 ## 🟡 Medium Impact (Scaling)
 
