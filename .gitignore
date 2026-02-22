@@ -1,0 +1,6 @@
+/target
+.env
+*.log
+debug/
+release/
+build_errors*.txt

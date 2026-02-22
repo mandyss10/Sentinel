@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel | The AI Performance Firewall</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #030712;
+            --card: #111827;
+            --accent: #3b82f6;
+            --text: #f9fafb;
+            --muted: #9ca3af;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Hero */
+        header {
+            padding: 6rem 0;
+            text-align: center;
+            background: radial-gradient(circle at top, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin: 0;
+            background: linear-gradient(to right, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+        }
+
+        .tagline {
+            font-size: 1.5rem;
+            color: var(--muted);
+            margin-top: 1rem;
+        }
+
+        .cta {
+            margin-top: 2rem;
+            display: inline-block;
+            background-color: var(--accent);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .cta:hover { transform: scale(1.05); }
+
+        /* Sections */
+        section { padding: 4rem 0; }
+        h2 { font-size: 2.5rem; margin-bottom: 2rem; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background-color: var(--card);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .card h3 { color: var(--accent); margin-top: 0; }
+
+        /* Demo Sim */
+        .terminal {
+            background-color: black;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            font-family: monospace;
+            border-left: 4px solid var(--accent);
+            font-size: 0.9rem;
+        }
+
+        .log-error { color: var(--danger); font-weight: bold; }
+        .log-success { color: var(--success); }
+
+        /* Footer */
+        footer {
+            padding: 4rem 0;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <h1>SENTINEL</h1>
+            <p class="tagline">The Performance Firewall for Autonomous Agents</p>
+            <a href="#install" class="cta">Start Controlling Costs →</a>
+        </div>
+    </header>
+
+    <section id="problem">
+        <div class="container">
+            <h2>The "Math of Ruin" Problem</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>Semantic Stall</h3>
+                    <p>Agents get stuck in stochastic reasoning loops, repeating the same logic with slightly different words.</p>
+                </div>
+                <div class="card">
+                    <h3>Economic Runaway</h3>
+                    <p>A single recursive bug can empty your API wallet in minutes. Most firewalls are too slow or too simple.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="solution" style="background: rgba(255,255,255,0.02)">
+        <div class="container">
+            <h2>Our Solution</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>Rust-Powered Proxy</h3>
+                    <p>Sub-10ms overhead. Intercepts OpenAI/Anthropic calls in real-time with concurrent state engine.</p>
+                </div>
+                <div class="card">
+                    <h3>Progress Scoring</h3>
+                    <p>Uses cosine similarity on embeddings to detect when an agent is no longer making progress.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="demo">
+        <div class="container">
+            <h2>See it in action</h2>
+            <div class="terminal">
+                <div>[16:20:01] <span class="log-success">FORWARD</span> to gpt-4o-mini</div>
+                <div>[16:20:03] <span class="log-success">SUCCESS</span> | Usage: 450 tokens ($0.00007)</div>
+                <div>[16:20:05] <span class="log-success">FORWARD</span> to gpt-4o-mini (Loop attempt 2)</div>
+                <div>[16:20:07] <span class="log-error">SENTINEL: INTERCEPTED</span> - Semantic Loop Detected (Dist: 0.012)</div>
+                <div>[16:20:07] <span class="log-error">ACTION</span>: Returning escape strategy prompt.</div>
+            </div>
+        </div>
+    </section>
+
+    <section id="install">
+        <div class="container text-center">
+            <h2>Installation</h2>
+            <div class="card">
+                <p>One line to secure your agents:</p>
+                <code style="background: black; padding: 0.5rem 1rem; border-radius: 0.25rem;">cargo run --release</code>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Sentinel Project. Licensed under AGPL-3.0.</p>
+        </div>
+    </footer>
+
+</body>
+</html>
