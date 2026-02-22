@@ -179,7 +179,7 @@ async fn main() {
         .route("/api/stats", get(get_stats))
         .route("/api/logs", get(get_logs))
         .route("/health", get(|| async { "Sentinel is running" }))
-        .fallback_service(tower_http::services::ServeDir::new("www").fallback(tower_http::services::ServeFile::new("www/index.html")))
+        .fallback_service(tower_http::services::ServeDir::new(".").fallback(tower_http::services::ServeFile::new("index.html")))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

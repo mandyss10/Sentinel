@@ -18,9 +18,10 @@ WORKDIR /app
 # Install runtime dependencies (SSL)
 RUN apt-get update && apt-get install -y libssl1.1 ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Copy the binary from builder
+# Copy the binary and assets from builder
 COPY --from=builder /app/target/release/pryect /app/sentinel
-COPY --from=builder /app/www /app/www
+COPY --from=builder /app/index.html /app/index.html
+COPY --from=builder /app/dashboard.html /app/dashboard.html
 
 # Expose the proxy port
 EXPOSE 3000
