@@ -21,12 +21,12 @@ def simulate_loop():
     print_banner()
     session_id = f"pitch-demo-{int(time.time())}"
     
-    # Intentional loop messages
+    # Intentional loop messages with higher word overlap
     messages = [
-        "Analyzing system logs to find the root cause...",
-        "Still analyzing the same logs for patterns...",
-        "Re-checking logs for the third time to be sure...",
-        "Initiating final log analysis pass..."
+        "Analyzing system logs for root cause analysis.",
+        "Analyzing system logs. Still doing root cause analysis.",
+        "Analyzing system logs. Continuing root cause analysis.",
+        "Analyzing system logs. Final pass on root cause analysis."
     ]
 
     total_waste_prevented = 0.0

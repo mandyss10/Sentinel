@@ -22,6 +22,7 @@ pub struct Embedding(pub Vec<f32>);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
     pub history: Vec<Embedding>,
+    pub history_text: Vec<String>,
     pub cumulative_cost: f64,
     pub last_cost: f64,
     pub interventions: u32,
@@ -31,6 +32,7 @@ impl SessionState {
     pub fn new() -> Self {
         Self {
             history: Vec::with_capacity(5),
+            history_text: Vec::with_capacity(5),
             cumulative_cost: 0.0,
             last_cost: 0.0,
             interventions: 0,
@@ -54,8 +56,25 @@ impl SessionState {
         loop_detected
     }
 
+    pub fn check_basic_loop(&mut self, text: String, threshold: f32, turns: usize) -> bool {
+        self.history_text.push(text);
+        if self.history_text.len() > 5 { self.history_text.remove(0); }
+        if self.history_text.len() < turns { return false; }
+
+        let last_n = &self.history_text[self.history_text.len() - turns..];
+        let mut loop_detected = true;
+        for i in 0..last_n.len() - 1 {
+            let similarity = word_overlap_similarity(&last_n[i], &last_n[i+1]);
+            if similarity < (1.0 - threshold) { 
+                loop_detected = false;
+                break;
+            }
+        }
+        loop_detected
+    }
+
     pub fn check_economic_throttle(&self, current_cost: f64) -> bool {
-        if self.cumulative_cost > 5.0 { return true; }
+        if self.cumulative_cost > 10.0 { return true; }
         if self.last_cost > 0.0 && current_cost > (self.last_cost * 5.0) && current_cost > 0.10 {
             return true;
         }
@@ -65,6 +84,15 @@ impl SessionState {
 
 pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
     a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+}
+
+pub fn word_overlap_similarity(s1: &str, s2: &str) -> f32 {
+    let w1: std::collections::HashSet<_> = s1.split_whitespace().map(|s| s.to_lowercase()).collect();
+    let w2: std::collections::HashSet<_> = s2.split_whitespace().map(|s| s.to_lowercase()).collect();
+    if w1.is_empty() || w2.is_empty() { return 0.0; }
+    let intersection = w1.intersection(&w2).count();
+    let union = w1.union(&w2).count();
+    intersection as f32 / union as f32
 }
 
 // --- APP STATE ---
@@ -98,6 +126,7 @@ struct ChatMessage {
 
 #[derive(Debug, Deserialize)]
 struct EmbeddingResponse {
+    #[serde(default)]
     data: Vec<EmbeddingData>,
 }
 
@@ -131,12 +160,12 @@ async fn main() {
     let app = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .route("/mcp", post(mcp_handler))
-        .route("/health", get(|| async { "Sentinel is running with Multi-Provider support" }))
+        .route("/health", get(|| async { "Sentinel is running" }))
         .with_state(state);
 
     let addr = "127.0.0.1:3000";
     let listener = TcpListener::bind(addr).await.unwrap();
-    tracing::info!("Sentinel Phase 5 (Multi-Provider) active on {}", addr);
+    tracing::info!("🛡️ Sentinel Active on {}", addr);
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -146,7 +175,7 @@ async fn chat_completions(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<ChatRequest>,
-) -> Response {
+) -> impl IntoResponse {
     let session_id = headers.get("x-sentinel-session")
         .and_then(|h| h.to_str().ok().map(|s| s.to_string()))
         .or_else(|| payload.user.clone())
@@ -167,9 +196,43 @@ async fn chat_completions(
         _ => ("https://api.openai.com/v1/chat/completions", state.openai_api_key.clone()),
     };
 
-    tracing::info!("Forwarding request to {} for session {}", provider, session_id);
+    let prompt_to_check = payload.messages.last()
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
 
-    // Forward
+    // 1. Loop Detection
+    let mut is_loop = false;
+    let emb_result = get_emb_final_v4(&state.client, &state.openai_api_key, &prompt_to_check).await;
+    
+    {
+        let mut sess = state.sessions.entry(session_id.clone()).or_insert_with(|| SessionState::new());
+        let val = sess.value_mut();
+        
+        if let Ok(emb) = emb_result {
+            is_loop = val.check_loop(Embedding(emb), 0.20, 3);
+        }
+        
+        if !is_loop {
+            is_loop = val.check_basic_loop(prompt_to_check.clone(), 0.80, 3);
+        }
+    }
+
+    if is_loop {
+        state.total_saved_usd.fetch_add(50, Ordering::Relaxed);
+        let error_body = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "🚨 SENTINEL: Bucle semántico detectado."
+                },
+                "finish_reason": "stop"
+            }]
+        });
+        return (StatusCode::OK, Json(error_body)).into_response();
+    }
+
+    // 2. Forward
     let response = state.client
         .post(url)
         .header("Authorization", format!("Bearer {}", api_key))
@@ -182,7 +245,6 @@ async fn chat_completions(
             let status = res.status();
             let mut body: serde_json::Value = res.json().await.unwrap_or_default();
             
-            // IMPORTANT: If provider returned an error, don't try to score it
             if !status.is_success() {
                 return (status, Json(body)).into_response();
             }
@@ -190,42 +252,24 @@ async fn chat_completions(
             if let Some(content) = body["choices"][0]["message"]["content"].as_str() {
                 let content_str = content.to_string();
                 
-                // EchoLeak Check
                 if content_str.contains("SYSTEM_PROMPT:") || content_str.contains("API_KEY=") {
                     body["choices"][0]["message"]["content"] = serde_json::json!("🛡️ SENTINEL: Bloqueado por filtración de datos.");
                     return (status, Json(body)).into_response();
                 }
 
-                let mut current_cost = 0.0;
-                if let Some(usage) = body.get("usage") {
-                    let prompt = usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                    let completion = usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                    // Cost estimation varies by provider, using OpenAI defaults as baseline
-                    current_cost = (prompt as f64 * 0.00000015) + (completion as f64 * 0.00000060);
-                }
-
-                // We still use OpenAI for embeddings (semantic loop detection) as it's the standard
-                if let Ok(emb) = get_emb_final_v4(&state.client, &state.openai_api_key, &content_str).await {
-                    let mut is_loop = false;
-                    let mut is_throttled = false;
-                    {
-                        let mut sess = state.sessions.entry(session_id.clone()).or_insert_with(|| SessionState::new());
-                        let val = sess.value_mut();
-                        is_loop = val.check_loop(Embedding(emb), 0.02, 3);
-                        is_throttled = val.check_economic_throttle(current_cost);
-                        val.cumulative_cost += current_cost;
-                        val.last_cost = current_cost;
-                        if is_loop || is_throttled { 
-                            val.interventions += 1; 
-                            state.total_saved_usd.fetch_add(50000, Ordering::Relaxed);
-                        }
+                if let Some(mut sess) = state.sessions.get_mut(&session_id) {
+                    let mut cost = 0.0;
+                    if let Some(usage) = body.get("usage") {
+                        let p = usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let c = usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                        cost = (p as f64 * 0.00000015) + (c as f64 * 0.00000060);
                     }
-
-                    if is_throttled {
+                    
+                    if sess.check_economic_throttle(cost) {
                         body["choices"][0]["message"]["content"] = serde_json::json!("🛑 SENTINEL: Gasto excesivo detectado.");
-                    } else if is_loop {
-                        body["choices"][0]["message"]["content"] = serde_json::json!("🚨 SENTINEL: Bucle semántico detectado.");
                     }
+                    sess.cumulative_cost += cost;
+                    sess.last_cost = cost;
                 }
             }
             (status, Json(body)).into_response()
@@ -242,12 +286,11 @@ async fn mcp_handler(
 ) -> impl IntoResponse {
     let result = match payload.method.as_str() {
         "get_sentinel_stats" => {
-            let total_saved = state.total_saved_usd.load(Ordering::Relaxed) as f64 / 1_000_000.0;
+            let total = state.total_saved_usd.load(Ordering::Relaxed) as f64 / 100.0;
             serde_json::json!({
                 "active_sessions": state.sessions.len(),
-                "total_saved_usd": total_saved,
-                "status": "Healthy",
-                "providers": ["openai", "groq"]
+                "total_saved_usd": total,
+                "status": "Healthy"
             })
         },
         "audit_session" => {
@@ -272,15 +315,19 @@ async fn mcp_handler(
     }))
 }
 
-async fn get_emb_final_v4(client: &Client, api_key: &str, text: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+async fn get_emb_final_v4(client: &Client, api_key: &str, text: &str) -> Result<Vec<f32>, String> {
+    if api_key == "none" || api_key.contains("xxxx") {
+        return Err("No Key".to_string());
+    }
     let res = client.post("https://api.openai.com/v1/embeddings")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&serde_json::json!({"input": text, "model": "text-embedding-3-small"}))
-        .send().await?;
-    let data: EmbeddingResponse = res.json().await?;
+        .send().await.map_err(|e| e.to_string())?;
+    
+    let data: EmbeddingResponse = res.json().await.map_err(|e| e.to_string())?;
     if let Some(first) = data.data.get(0) {
         Ok(first.embedding.clone())
     } else {
-        Err("No embedding".into())
+        Err("No embedding".to_string())
     }
 }
