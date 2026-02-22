@@ -73,8 +73,9 @@ pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
 struct AppState {
     client: Client,
     openai_api_key: String,
+    groq_api_key: String,
     sessions: Arc<DashMap<String, SessionState>>,
-    total_saved_usd: Arc<AtomicU64>, // Scaled by 1,000,000 for precision
+    total_saved_usd: Arc<AtomicU64>,
 }
 
 // --- SCHEMAS ---
@@ -122,6 +123,7 @@ async fn main() {
     let state = AppState {
         client: Client::new(),
         openai_api_key: std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| "none".to_string()),
+        groq_api_key: std::env::var("GROQ_API_KEY").unwrap_or_else(|_| "none".to_string()),
         sessions: Arc::new(DashMap::new()),
         total_saved_usd: Arc::new(AtomicU64::new(0)),
     };
@@ -129,12 +131,12 @@ async fn main() {
     let app = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .route("/mcp", post(mcp_handler))
-        .route("/health", get(|| async { "Sentinel is running" }))
+        .route("/health", get(|| async { "Sentinel is running with Multi-Provider support" }))
         .with_state(state);
 
     let addr = "127.0.0.1:3000";
     let listener = TcpListener::bind(addr).await.unwrap();
-    tracing::info!("Sentinel (All Phases) active on 127.0.0.1:3000");
+    tracing::info!("Sentinel Phase 5 (Multi-Provider) active on {}", addr);
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -150,12 +152,26 @@ async fn chat_completions(
         .or_else(|| payload.user.clone())
         .unwrap_or_else(|| "default".to_string());
 
-    let client = state.client.clone();
-    let api_key = state.openai_api_key.clone();
+    let provider = headers.get("x-sentinel-provider")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or_else(|| {
+            if payload.model.contains("llama") || payload.model.contains("mixtral") || payload.model.contains("gemma") {
+                "groq"
+            } else {
+                "openai"
+            }
+        });
+
+    let (url, api_key) = match provider {
+        "groq" => ("https://api.groq.com/openai/v1/chat/completions", state.groq_api_key.clone()),
+        _ => ("https://api.openai.com/v1/chat/completions", state.openai_api_key.clone()),
+    };
+
+    tracing::info!("Forwarding request to {} for session {}", provider, session_id);
 
     // Forward
-    let response = client
-        .post("https://api.openai.com/v1/chat/completions")
+    let response = state.client
+        .post(url)
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&payload)
         .send()
@@ -179,10 +195,12 @@ async fn chat_completions(
                 if let Some(usage) = body.get("usage") {
                     let prompt = usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
                     let completion = usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                    // Cost estimation varies by provider, using OpenAI defaults as baseline
                     current_cost = (prompt as f64 * 0.00000015) + (completion as f64 * 0.00000060);
                 }
 
-                if let Ok(emb) = get_emb_final_v3(&client, &api_key, &content_str).await {
+                // We still use OpenAI for embeddings (semantic loop detection) as it's the standard
+                if let Ok(emb) = get_emb_final_v4(&state.client, &state.openai_api_key, &content_str).await {
                     let mut is_loop = false;
                     let mut is_throttled = false;
                     {
@@ -194,7 +212,7 @@ async fn chat_completions(
                         val.last_cost = current_cost;
                         if is_loop || is_throttled { 
                             val.interventions += 1; 
-                            state.total_saved_usd.fetch_add(50000, Ordering::Relaxed); // Nominal $0.05 saved
+                            state.total_saved_usd.fetch_add(50000, Ordering::Relaxed);
                         }
                     }
 
@@ -223,7 +241,8 @@ async fn mcp_handler(
             serde_json::json!({
                 "active_sessions": state.sessions.len(),
                 "total_saved_usd": total_saved,
-                "status": "Healthy"
+                "status": "Healthy",
+                "providers": ["openai", "groq"]
             })
         },
         "audit_session" => {
@@ -248,11 +267,15 @@ async fn mcp_handler(
     }))
 }
 
-async fn get_emb_final_v3(client: &Client, api_key: &str, text: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+async fn get_emb_final_v4(client: &Client, api_key: &str, text: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     let res = client.post("https://api.openai.com/v1/embeddings")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&serde_json::json!({"input": text, "model": "text-embedding-3-small"}))
         .send().await?;
     let data: EmbeddingResponse = res.json().await?;
-    Ok(data.data[0].embedding.clone())
+    if let Some(first) = data.data.get(0) {
+        Ok(first.embedding.clone())
+    } else {
+        Err("No embedding".into())
+    }
 }
