@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use reqwest::Client;
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::collections::VecDeque;
+use tokio::sync::Mutex;
+use tower_http::cors::CorsLayer;
 
 // --- SEMANTIC SCORER & SECURITY ---
 
@@ -95,6 +98,17 @@ pub fn word_overlap_similarity(s1: &str, s2: &str) -> f32 {
     intersection as f32 / union as f32
 }
 
+// --- AUDIT LOGS ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct InterventionLog {
+    timestamp: u64,
+    session_id: String,
+    reason: String,
+    content_snippet: String,
+    savings_est: f64,
+}
+
 // --- APP STATE ---
 
 #[derive(Clone)]
@@ -104,6 +118,7 @@ struct AppState {
     groq_api_key: String,
     sessions: Arc<DashMap<String, SessionState>>,
     total_saved_usd: Arc<AtomicU64>,
+    audit_logs: Arc<Mutex<VecDeque<InterventionLog>>>,
 }
 
 // --- SCHEMAS ---
@@ -155,21 +170,40 @@ async fn main() {
         groq_api_key: std::env::var("GROQ_API_KEY").unwrap_or_else(|_| "none".to_string()),
         sessions: Arc::new(DashMap::new()),
         total_saved_usd: Arc::new(AtomicU64::new(0)),
+        audit_logs: Arc::new(Mutex::new(VecDeque::with_capacity(50))),
     };
 
     let app = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .route("/mcp", post(mcp_handler))
+        .route("/api/stats", get(get_stats))
+        .route("/api/logs", get(get_logs))
         .route("/health", get(|| async { "Sentinel is running" }))
+        .layer(CorsLayer::permissive())
         .with_state(state);
 
     let addr = "127.0.0.1:3000";
     let listener = TcpListener::bind(addr).await.unwrap();
-    tracing::info!("🛡️ Sentinel Active on {}", addr);
+    tracing::info!("🛡️ Sentinel SaaS active on {}", addr);
     axum::serve(listener, app).await.unwrap();
 }
 
-// --- PROXY HANDLER ---
+// --- HANDLERS ---
+
+async fn get_stats(State(state): State<AppState>) -> impl IntoResponse {
+    let total = state.total_saved_usd.load(Ordering::Relaxed) as f64 / 100.0;
+    Json(serde_json::json!({
+        "active_sessions": state.sessions.len(),
+        "total_saved_usd": total,
+        "interventions": state.sessions.iter().map(|s| s.interventions).sum::<u32>(),
+        "status": "Healthy"
+    }))
+}
+
+async fn get_logs(State(state): State<AppState>) -> impl IntoResponse {
+    let logs = state.audit_logs.lock().await;
+    Json(logs.clone())
+}
 
 async fn chat_completions(
     State(state): State<AppState>,
@@ -202,6 +236,7 @@ async fn chat_completions(
 
     // 1. Loop Detection
     let mut is_loop = false;
+    let mut reason = String::new();
     let emb_result = get_emb_final_v4(&state.client, &state.openai_api_key, &prompt_to_check).await;
     
     {
@@ -209,22 +244,40 @@ async fn chat_completions(
         let val = sess.value_mut();
         
         if let Ok(emb) = emb_result {
-            is_loop = val.check_loop(Embedding(emb), 0.20, 3);
+            if val.check_loop(Embedding(emb), 0.20, 3) {
+                is_loop = true;
+                reason = "Semantic Loop Detected (Vector Similarity)".to_string();
+            }
         }
         
         if !is_loop {
-            is_loop = val.check_basic_loop(prompt_to_check.clone(), 0.80, 3);
+            if val.check_basic_loop(prompt_to_check.clone(), 0.80, 3) {
+                is_loop = true;
+                reason = "Fuzzy Overlap Detected (String Repetition)".to_string();
+            }
         }
     }
 
     if is_loop {
         state.total_saved_usd.fetch_add(50, Ordering::Relaxed);
+        
+        // Log intervention
+        let mut logs = state.audit_logs.lock().await;
+        logs.push_back(InterventionLog {
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+            session_id: session_id.clone(),
+            reason: reason.clone(),
+            content_snippet: prompt_to_check.chars().take(50).collect::<String>() + "...",
+            savings_est: 0.50,
+        });
+        if logs.len() > 50 { logs.pop_front(); }
+
         let error_body = serde_json::json!({
             "choices": [{
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": "🚨 SENTINEL: Bucle semántico detectado."
+                    "content": format!("🚨 SENTINEL: Bloqueado. Motivo: {}", reason)
                 },
                 "finish_reason": "stop"
             }]
@@ -254,6 +307,16 @@ async fn chat_completions(
                 
                 if content_str.contains("SYSTEM_PROMPT:") || content_str.contains("API_KEY=") {
                     body["choices"][0]["message"]["content"] = serde_json::json!("🛡️ SENTINEL: Bloqueado por filtración de datos.");
+                    
+                    let mut logs = state.audit_logs.lock().await;
+                    logs.push_back(InterventionLog {
+                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                        session_id: session_id.clone(),
+                        reason: "Sensitive Data Leak (EchoLeak)".to_string(),
+                        content_snippet: "[REDACTED SENSITIVE DATA]".to_string(),
+                        savings_est: 0.10,
+                    });
+                    
                     return (status, Json(body)).into_response();
                 }
 
@@ -267,6 +330,15 @@ async fn chat_completions(
                     
                     if sess.check_economic_throttle(cost) {
                         body["choices"][0]["message"]["content"] = serde_json::json!("🛑 SENTINEL: Gasto excesivo detectado.");
+                        
+                        let mut logs = state.audit_logs.lock().await;
+                        logs.push_back(InterventionLog {
+                            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                            session_id: session_id.clone(),
+                            reason: "Economic Throttling (Cost Spike)".to_string(),
+                            content_snippet: format!("Cost: ${:.4}", cost),
+                            savings_est: 1.00,
+                        });
                     }
                     sess.cumulative_cost += cost;
                     sess.last_cost = cost;
